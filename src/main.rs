@@ -1,29 +1,59 @@
 use std::{
     fs,
-    io::{BufRead, BufReader, Write},
+    io::{BufRead, BufReader, ErrorKind, Write},
     net::{TcpListener, TcpStream},
-    thread,
+    thread::{self, Thread, sleep},
     time::Duration,
 };
 
-fn main() {
-    //TCP 서버 소켓 생성 후 연결 대기
-    let tcp_listener: TcpListener =
-        TcpListener::bind("127.0.0.1:7878").expect("Tcp Listener 획득 실패");
+use Rustify::ThreadPool;
 
-    //incoming 메서드가 내부적으로 POSIX 표준 시스템 콜 accept()를 동기(블로킹) 방식으로 호출함
-    //메인 스레드 블로킹되어 연결을 계속 기다리며 다른 일을 하지 못함
+fn main() {
+    let host: String = String::from("127.0.0.1");
+    let port: String = String::from("7878");
+    let addr: String = format!("{}:{}", host, port);
+    let pool: ThreadPool = ThreadPool::build(100);
+
+    //tcp 포트 바인딩
+    //많은 운영 체제에는 지원 가능한 동시 연결 개수에 제한이 있습니다; 이 개수를 초과하는 새로운 연결을 시도하면 열려 있는 연결 중 일부가 닫힐 때까지 에러가 발생합니다
+    let tcp_listener: TcpListener = TcpListener::bind(addr).expect("tcp Listener 획득 실패!");
+
+    tcp_listener.set_nonblocking(true).unwrap();
+
     for stream in tcp_listener.incoming() {
-        let tcp_stream = stream.unwrap();
-        thread::spawn(move || handle_connection(&tcp_stream));
+        match stream {
+            Ok(tcp_stream) => {
+                pool.execute(move || {
+                    handle_connection(&tcp_stream);
+                });
+            }
+            Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
+                // 연결 없음 - 정상 상황
+                // 짧게 대기 (CPU 낭비 방지)
+                // std::thread::sleep(std::time::Duration::from_millis(100));
+                continue;
+            }
+            Err(e) => {
+                eprintln!("실제 에러 발생: {}", e);
+                break;
+            }
+        }
     }
+
+    // for stream in tcp_listener.incoming() {
+    //     let stream: std::net::TcpStream = stream.unwrap();
+    //     pool.execute(move || {
+    //         handle_connection(&stream);
+    //     });
+
+    //     // println!("stream = {:#?}", stream);
+    // }
+
+    println!("서버 종료..");
 }
 
-/*
- * TCP 연결을 처리하는 메서드
- */
 fn handle_connection(mut stream: &TcpStream) {
-    println!("스레드 생성!!");
+    // println!("커넥션 핸들러 실행!");
     let buf_reader = BufReader::new(stream);
     let req_line = buf_reader.lines().next().unwrap().unwrap();
 
@@ -48,4 +78,6 @@ fn handle_connection(mut stream: &TcpStream) {
 
     stream.write_all(response.as_bytes()).unwrap();
     stream.flush().unwrap();
+
+    // println!("Req : {:#?}", http_request);
 }
