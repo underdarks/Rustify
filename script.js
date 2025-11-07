@@ -8,6 +8,7 @@ export const options = {
 };
 
 export default function test() {
-  const url = "http://localhost:7879";
+  const url = "http://localhost:7878";
   http.get(url);
+  // sleep(1);
 }

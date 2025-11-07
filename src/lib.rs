@@ -1,7 +1,11 @@
 use std::{
+    io::Result,
+    os::fd::RawFd,
     sync::{Arc, Mutex, mpsc},
     thread,
 };
+
+use libc::{EV_ADD, EV_ENABLE, EVFILT_READ, PARODD};
 
 /**
  ThreadPool 상세 분석
@@ -145,8 +149,10 @@ impl ThreadPool {
 
 impl Drop for ThreadPool {
     fn drop(&mut self) {
+        drop(self.sender.take()); //sender를 해제하므로, 더 이상 아무 메시지도 보내지 않게끔한다.
+        println!("Shutting down all workers...");
+
         for worker in &mut self.workers {
-            drop(self.sender.take()); //sender를 해제하므로, 더 이상 아무 메시지도 보내지 않게끔한다.
             println!("Shut down worker {}", worker.id);
 
             //cannot move out of `worker.thread` which is behind a mutable reference 오류 발생
@@ -154,8 +160,99 @@ impl Drop for ThreadPool {
             //각 worker의 가변 대여만 있고 join이 인수의 소유권을 가져가기 때문에 join을 호출할 수 없음을 알려줍니다
             //take():Option<T>에서 T를 꺼내고 Option을 None으로 바꾼다. 소유권을 가져올 수 있게 해주는 트릭!
             if let Some(thread) = worker.thread.take() {
-                thread.join().unwrap();
+                match thread.join() {
+                    Ok(_) => println!("Worker {} shut down successfully", worker.id),
+                    Err(e) => eprintln!("Worker {} panicked: {:?}", worker.id, e),
+                }
             }
         }
     }
 }
+
+extern crate libc;
+
+pub struct Kqueue {
+    kq_fd: RawFd, //fd값
+}
+
+impl Kqueue {
+    pub fn new() -> Result<Self> {
+        //kqueue 시스템 콜 호출(핸들(fd) 값 리턴됨)
+        //rust는 시스템 콜에 대한 안정성을 증명할 수 없으니, unsafe를 통해 개발자가 책임지고 올바르게 쓴다라고 표기
+        let kq_fd: i32 = unsafe { libc::kqueue() };
+
+        if kq_fd < 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+
+        Ok(Kqueue { kq_fd })
+    }
+
+    //fd 등록
+    pub fn add(&self, fd: RawFd) -> Result<()> {
+        let mut changelist: libc::kevent = libc::kevent {
+            ident: fd as usize,                    // 감시할 파일 디스크립터
+            filter: libc::EVFILT_READ,             // 읽기 이벤트 감시
+            flags: libc::EV_ADD | libc::EV_ENABLE, // 추가 + 활성화
+            fflags: 0,                             // 필터별 추가 플래그 (사용 안 함)
+            data: 0,                               // 필터별 데이터 (사용 안 함)
+            udata: fd as *mut libc::c_void, // 사용자 정의 데이터 (나중에 받을 때 사용), 여기서는 fd를 저장해서 나중에 "어떤 소켓의 이벤트인지" 구분
+        };
+
+        let ret = unsafe {
+            libc::kevent(
+                self.kq_fd,                         // kqueue fd
+                &changelist as *const libc::kevent, // 등록할 이벤트 리스트
+                1,                                  // changelist 개수
+                std::ptr::null_mut(),               // eventlist (받을 이벤트, 지금은 등록만)
+                0,                                  // eventlist 개수
+                std::ptr::null(),                   // timeout (사용 안 함)
+            )
+        };
+
+        if ret < 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+
+        Ok(())
+    }
+
+    //이벤트 대기(블로킹)
+    pub fn wait(&self, events: &mut [libc::kevent]) -> Result<usize> {
+        let ret = unsafe {
+            libc::kevent(
+                self.kq_fd,          // kqueue fd
+                std::ptr::null(),    // changelist (없음)
+                0,                   // nchanges
+                events.as_mut_ptr(), // eventlist (발생한 이벤트를 여기에 저장)
+                events.len() as i32, // nevents (최대 128개)
+                std::ptr::null(),    // timeout (NULL = 무한 대기)
+            )
+        };
+
+        if ret < 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+
+        Ok(ret as usize)
+    }
+}
+
+/*파일 디스크립터는 OS 리소스
+- 프로세스당 제한 있음 (보통 1024개)
+- 누수 시 "Too many open files" 에러
+- Rust의 RAII 패턴으로 자동 정리
+*/
+impl Drop for Kqueue {
+    fn drop(&mut self) {
+        unsafe {
+            libc::close(self.kq_fd);
+        }
+    }
+}
+
+struct Epoll {
+    epoll_fd: RawFd,
+}
+
+impl Epoll {}
