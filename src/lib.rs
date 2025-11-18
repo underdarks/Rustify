@@ -1,11 +1,15 @@
 use std::{
-    io::Result,
+    io::{Error, Result},
     os::fd::RawFd,
     sync::{Arc, Mutex, mpsc},
     thread,
 };
 
-use libc::{EV_ADD, EV_ENABLE, EVFILT_READ, PARODD};
+#[cfg(target_os = "macos")]
+use libc::{EV_ADD, EV_ENABLE, EVFILT_READ};
+
+#[cfg(target_os = "linux")]
+use libc::{EPOLL_CTL_ADD, EPOLLIN, c_int, epoll_create1, epoll_ctl, epoll_event, epoll_wait};
 
 /**
  ThreadPool 상세 분석
@@ -62,7 +66,7 @@ impl Worker {
 
                 match msg {
                     Ok(task) => {
-                        println!("Worker {id} 테스크 실행중...");
+                        // println!("Worker {id} 테스크 실행중...");
                         task();
                     }
                     Err(_) => {
@@ -171,10 +175,13 @@ impl Drop for ThreadPool {
 
 extern crate libc;
 
+// ============= macOS (kqueue) 구현 =============
+#[cfg(target_os = "macos")]
 pub struct Kqueue {
     kq_fd: RawFd, //fd값
 }
 
+#[cfg(target_os = "macos")]
 impl Kqueue {
     pub fn new() -> Result<Self> {
         //kqueue 시스템 콜 호출(핸들(fd) 값 리턴됨)
@@ -188,14 +195,14 @@ impl Kqueue {
         Ok(Kqueue { kq_fd })
     }
 
-    //fd 등록
+    //커널에 fd 등록
     pub fn add(&self, fd: RawFd) -> Result<()> {
-        let mut changelist: libc::kevent = libc::kevent {
-            ident: fd as usize,                    // 감시할 파일 디스크립터
-            filter: libc::EVFILT_READ,             // 읽기 이벤트 감시
-            flags: libc::EV_ADD | libc::EV_ENABLE, // 추가 + 활성화
-            fflags: 0,                             // 필터별 추가 플래그 (사용 안 함)
-            data: 0,                               // 필터별 데이터 (사용 안 함)
+        let changelist: libc::kevent = libc::kevent {
+            ident: fd as usize,             // 감시할 파일 디스크립터
+            filter: EVFILT_READ,            // 읽기 이벤트 감시
+            flags: EV_ADD | EV_ENABLE,      // 추가 + 활성화
+            fflags: 0,                      // 필터별 추가 플래그 (사용 안 함)
+            data: 0,                        // 필터별 데이터 (사용 안 함)
             udata: fd as *mut libc::c_void, // 사용자 정의 데이터 (나중에 받을 때 사용), 여기서는 fd를 저장해서 나중에 "어떤 소켓의 이벤트인지" 구분
         };
 
@@ -219,7 +226,7 @@ impl Kqueue {
 
     //이벤트 대기(블로킹)
     pub fn wait(&self, events: &mut [libc::kevent]) -> Result<usize> {
-        let ret = unsafe {
+        let event_count = unsafe {
             libc::kevent(
                 self.kq_fd,          // kqueue fd
                 std::ptr::null(),    // changelist (없음)
@@ -230,11 +237,11 @@ impl Kqueue {
             )
         };
 
-        if ret < 0 {
-            return Err(std::io::Error::last_os_error());
+        if event_count < 0 {
+            return Err(Error::last_os_error());
         }
 
-        Ok(ret as usize)
+        Ok(event_count as usize)
     }
 }
 
@@ -243,6 +250,7 @@ impl Kqueue {
 - 누수 시 "Too many open files" 에러
 - Rust의 RAII 패턴으로 자동 정리
 */
+#[cfg(target_os = "macos")]
 impl Drop for Kqueue {
     fn drop(&mut self) {
         unsafe {
@@ -251,8 +259,65 @@ impl Drop for Kqueue {
     }
 }
 
-struct Epoll {
+// ============= Linux (epoll) 구현 =============
+#[cfg(target_os = "linux")]
+pub struct Epoll {
     epoll_fd: RawFd,
 }
 
-impl Epoll {}
+#[cfg(target_os = "linux")]
+impl Epoll {
+    pub fn new() -> Result<Self> {
+        // epoll_create1(0)으로 epoll 인스턴스 생성
+        let epoll_fd: c_int = unsafe { epoll_create1(0) };
+
+        if epoll_fd < 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+
+        Ok(Epoll { epoll_fd })
+    }
+
+    // 커널에 fd 등록 (읽기 이벤트 감시)
+    pub fn add(&self, fd: RawFd) -> Result<()> {
+        let mut event: epoll_event = epoll_event {
+            events: EPOLLIN as u32, // 읽기 가능 이벤트
+            u64: fd as u64,         // 사용자 데이터 (fd를 저장)
+        };
+
+        let ret = unsafe { epoll_ctl(self.epoll_fd, EPOLL_CTL_ADD as c_int, fd, &mut event) };
+
+        if ret < 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+
+        Ok(())
+    }
+
+    // 이벤트 대기 (블로킹, timeout=-1 무한 대기)
+    pub fn wait(&self, events: &mut [epoll_event]) -> Result<usize> {
+        let event_count = unsafe {
+            epoll_wait(
+                self.epoll_fd,
+                events.as_mut_ptr(),
+                events.len() as c_int,
+                -1, // 무한 대기
+            )
+        };
+
+        if event_count < 0 {
+            return Err(Error::last_os_error());
+        }
+
+        Ok(event_count as usize)
+    }
+}
+
+#[cfg(target_os = "linux")]
+impl Drop for Epoll {
+    fn drop(&mut self) {
+        unsafe {
+            libc::close(self.epoll_fd);
+        }
+    }
+}

@@ -4,11 +4,12 @@ import { expect } from "https://jslib.k6.io/k6-testing/0.5.0/index.js";
 
 export const options = {
   vus: 10,
-  duration: "30s",
+  duration: "10s",
 };
 
 export default function test() {
   const url = "http://localhost:7878";
   http.get(url);
+
   // sleep(1);
 }

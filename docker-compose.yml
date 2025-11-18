@@ -1,0 +1,29 @@
+version: "3.8"
+
+services:
+  rustify:
+    # 로컬 Dockerfile에서 빌드하여 빌드 종속성이 이미지에 캐시됨.
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: rustify:local
+    container_name: rustify
+    working_dir: /usr/src/rustify
+    # 개발을 위해 소스코드만 마운트하고, 이미지에서 빌드된 target/은 보존함.
+    volumes:
+      - ./src:/usr/src/rustify/src:cached # 코드 반복 개발용으로만 src/ 마운트
+      - ./Cargo.toml:/usr/src/rustify/Cargo.toml # 참고용으로 Cargo.toml 마운트
+      - ./Cargo.lock:/usr/src/rustify/Cargo.lock # Cargo.lock이 있으면 마운트
+      - rust_target:/usr/src/rustify/target # 이미지 빌드에서 생성된 target/ 보존
+    ports:
+      - "7878:7878"
+    environment:
+      - RUST_BACKTRACE=1
+    # 컨테이너를 대화형으로 유지하여 디버깅 및 셸 접속 용이.
+    tty: true
+    stdin_open: true
+    # Apple Silicon에서 x86 에뮬레이션이 필요하면 아래 주석 해제:
+    # platform: linux/amd64
+
+volumes:
+  rust_target:
