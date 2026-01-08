@@ -1,13 +1,17 @@
 # Rustify
 
-Nginx를 모방하여 경량, 고성능 Rust 기반 웹 서버/리버스 프록시 프로젝트입니다. 멀티프로세스 아키텍처를 활용하여 안정성과 확장성을 제공합니다.
+Nginx를 모방하여 경량, 고성능 Rust 기반 웹 서버/리버스 프록시 프로젝트입니다. </br>
+멀티프로세스 아키텍처를 활용하여 안정성과 확장성을 제공합니다.</br></br>
 
 ## 📋 프로젝트 개요
 
-Rustify는 Nginx에서 영감을 받은 **고성능 웹 서버**로서, Rust의 안전성과 성능을 활용합니다. Master-Worker 프로세스 모델을 사용하여 효율적인 요청 처리와 자동 재시작 기능을 제공합니다.
+Rustify는 Nginx에서 영감을 받은 경량 고성능 웹 서버로서, Rust의 안전성과 성능을 활용합니다. </br>
+
+Master-Worker 프로세스 모델을 사용하여 효율적인 요청 처리와 자동 재시작 기능을 제공합니다.</br></br>
+
+
 
 ### 주요 특징
-
 - **Master-Worker 프로세스 모델**: Nginx와 유사한 아키텍처로 안정적인 요청 처리
 - **멀티코어 지원**: CPU 코어 수에 따라 자동으로 워커 프로세스 생성
 - **플랫폼별 I/O 멀티플렉싱**:
@@ -16,6 +20,9 @@ Rustify는 Nginx에서 영감을 받은 **고성능 웹 서버**로서, Rust의 
 - **리버스 프록시**: reqwest를 활용한 HTTP 요청 포워딩
 - **스레드 풀**: 동적 작업 분배를 위한 ThreadPool 구현
 - **Docker 지원**: 간편한 컨테이너화 및 배포
+
+</br></br>
+
 
 ## 🏗️ 프로젝트 구조
 
@@ -44,6 +51,8 @@ Rustify/
 ├── script.js                    # JavaScript 파일
 └── target/                      # 컴파일된 바이너리 및 캐시
 ```
+
+</br></br>
 
 ## 🔧 핵심 모듈 설명
 
@@ -84,6 +93,7 @@ Rustify/
 - **host.rs**: 기본 수신 주소 (127.0.0.1:7879)
 - **thread_pool.rs**: ThreadPool 파라미터
 
+</br></br>
 ## 📦 의존성
 
 ```toml
@@ -97,8 +107,10 @@ tokio = "1"               # 비동기 런타임
 - **reqwest**: HTTP 요청 포워딩 (리버스 프록시)
 - **tokio**: 비동기 작업 처리
 
+</br></br>
 ## 🚀 빌드 및 실행
 
+</br></br>
 ### 로컬 빌드 및 실행
 
 ```bash
@@ -107,6 +119,7 @@ cargo build --release
 cargo run
 ```
 
+</br></br>
 ### Docker를 이용한 실행
 
 ```bash
@@ -120,6 +133,7 @@ docker-compose up -d --build
 docker-compose down
 ```
 
+</br></br>
 ## 📝 설정
 
 **서버 주소 및 포트 변경**: [src/config/host.rs](src/config/host.rs)
@@ -128,6 +142,7 @@ docker-compose down
 pub const HOST_ADDR: &str = "127.0.0.1:7879";  // 변경 가능
 ```
 
+</br></br>
 ## 🔍 동작 원리
 
 ### Master-Worker 구조
@@ -165,8 +180,10 @@ Worker 0 (SO_REUSEPORT)         Worker N (SO_REUSEPORT)
 - **Rust**: 1.70+ (2024 에디션)
 - **Docker**: (선택사항)
 
+</br></br>
 ## 🛠️ 개발 팁
 
+</br></br>
 ### 디버그 정보 활성화
 
 ```bash
@@ -174,15 +191,18 @@ Worker 0 (SO_REUSEPORT)         Worker N (SO_REUSEPORT)
 RUST_BACKTRACE=1 cargo run
 ```
 
+</br></br>
 ### Docker 개발 환경
 
 - `docker-compose.yml`에서 `src/` 마운트로 hot-reload 불가능하지만 빠른 재빌드 가능
 - `rust_target` 볼륨으로 빌드 캐시 보존
 
+</br></br>
 ## 📄 라이선스
 
 이 프로젝트는 개발 중입니다.
 
+</br></br>
 ## 🤝 기여
 
 이 프로젝트는 학습 및 연구 목적으로 진행 중입니다.
