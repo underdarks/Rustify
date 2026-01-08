@@ -93,7 +93,7 @@ pub fn create_reusable_listener(addr: &str) -> Result<TcpListener> {
     }
 
     //listen
-    let ret = unsafe { libc::listen(sockfd, 4096) };
+    let ret = unsafe { libc::listen(sockfd, 15000) };
 
     if ret < 0 {
         unsafe { close(sockfd) };
@@ -118,6 +118,8 @@ pub fn start_worker_process(id: usize, parent_pid: i32) -> Result<()> {
 // ============= macOS (kqueue) 워커 구현 =============
 #[cfg(target_os = "macos")]
 pub fn start_worker_process_kqueue(id: usize, parent_pid: i32) -> Result<()> {
+    use crate::config::host::HOST_ADDR;
+
     let pid: i32 = unsafe { libc::getpid() };
     println!(
         "👷 Worker {} started (PID: {},  Parent PID={})",
@@ -127,7 +129,7 @@ pub fn start_worker_process_kqueue(id: usize, parent_pid: i32) -> Result<()> {
     );
 
     //각 Worker가 자체 리스너 생성(SO_REUSEPORT 덕분)
-    let tcp_listener: TcpListener = create_reusable_listener("0.0.0.0:7878")?;
+    let tcp_listener: TcpListener = create_reusable_listener(HOST_ADDR)?;
     tcp_listener.set_nonblocking(true)?;
 
     //각 Worker가 자체 kqueue 생성
@@ -136,7 +138,7 @@ pub fn start_worker_process_kqueue(id: usize, parent_pid: i32) -> Result<()> {
     kqueue.add(listener_fd)?; //소켓 fd를 커널에 등록
 
     //각 worker당 스레드풀 생성
-    let pool: ThreadPool = ThreadPool::build(50);
+    let pool: ThreadPool = ThreadPool::build(100);
 
     let mut events: Vec<kevent> = vec![unsafe { std::mem::zeroed::<libc::kevent>() }; 128];
     let mut total = 0;
@@ -148,7 +150,7 @@ pub fn start_worker_process_kqueue(id: usize, parent_pid: i32) -> Result<()> {
             let event: &kevent = &events[i];
             let fd = event.udata as RawFd;
 
-            println!("fd = {}, listenr_fd = {}", fd, listener_fd);
+            println!("fd = {}, listener_fd = {}", fd, listener_fd);
 
             if fd == listener_fd {
                 let mut batch_count = 0;
@@ -204,7 +206,7 @@ pub fn start_worker_process_epoll(id: usize, parent_pid: i32) -> Result<()> {
     );
 
     //각 Worker가 자체 리스너 생성(SO_REUSEPORT 덕분)
-    let tcp_listener: TcpListener = create_reusable_listener("0.0.0.0:7878")?;
+    let tcp_listener: TcpListener = create_reusable_listener("HOST_ADDR")?;
     tcp_listener.set_nonblocking(true)?;
 
     //각 Worker가 자체 epoll 생성
@@ -213,7 +215,7 @@ pub fn start_worker_process_epoll(id: usize, parent_pid: i32) -> Result<()> {
     epoll.add(listener_fd)?; //소켓 fd를 커널에 등록
 
     //각 worker당 스레드풀 생성
-    let pool: ThreadPool = ThreadPool::build(50);
+    let pool: ThreadPool = ThreadPool::build(100);
 
     let mut events: Vec<epoll_event> =
         vec![unsafe { std::mem::zeroed::<libc::epoll_event>() }; 128];

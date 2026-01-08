@@ -22,7 +22,7 @@ fn main() -> Result<()> {
     let worker_count: usize = get_cpu_count();
 
     //서버 소켓 생성
-    let server_tcp_socket: TcpListener = create_reusable_listener(HOST_ADDR).unwrap();
+    // let server_tcp_socket: TcpListener = create_reusable_listener(HOST_ADDR).unwrap();
 
     //워커 프로세스에게 fd, kqueue를 넘겨서 공유해줘야함
     for id in 0..worker_count {
@@ -34,7 +34,7 @@ fn main() -> Result<()> {
         match unsafe { { libc::fork() } } {
             //자식 프로세스(Worker)
             0 => {
-                drop(server_tcp_socket); //부모 리스너 닫기
+                // drop(server_tcp_socket); //부모 리스너 닫기
 
                 let my_pid = unsafe { getpid() };
                 let parent_pid = unsafe { getppid() };

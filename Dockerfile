@@ -1,6 +1,9 @@
 # 2024 에디션을 지원하는 최신 안정 Rust 이미지 사용.
 # 특정 버전이 필요하면 `latest` 대신 해당 태그로 교체하세요.
-FROM rust:latest
+#Base OS: Debian (리눅스 배포판)
+#포함 사항: Rust 툴체인 + Cargo + 기본 리눅스 도구
+#아키텍처: 보통 linux/amd64 (x86-64 리눅스)
+FROM rust:latest 
 
 WORKDIR /usr/src/rustify
 
