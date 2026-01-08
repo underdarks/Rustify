@@ -110,7 +110,7 @@ tokio = "1"               # 비동기 런타임
 </br></br>
 ## 🚀 빌드 및 실행
 
-</br></br>
+
 ### 로컬 빌드 및 실행
 
 ```bash
@@ -119,7 +119,6 @@ cargo build --release
 cargo run
 ```
 
-</br></br>
 ### Docker를 이용한 실행
 
 ```bash
@@ -174,6 +173,7 @@ Worker 0 (SO_REUSEPORT)         Worker N (SO_REUSEPORT)
 5. ThreadPool을 통해 작업 분배
 6. 응답 반환
 
+</br></br>
 ## 📊 시스템 요구사항
 
 - **OS**: macOS, Linux (Kqueue/Epoll 지원)
@@ -183,7 +183,7 @@ Worker 0 (SO_REUSEPORT)         Worker N (SO_REUSEPORT)
 </br></br>
 ## 🛠️ 개발 팁
 
-</br></br>
+
 ### 디버그 정보 활성화
 
 ```bash
@@ -191,7 +191,6 @@ Worker 0 (SO_REUSEPORT)         Worker N (SO_REUSEPORT)
 RUST_BACKTRACE=1 cargo run
 ```
 
-</br></br>
 ### Docker 개발 환경
 
 - `docker-compose.yml`에서 `src/` 마운트로 hot-reload 불가능하지만 빠른 재빌드 가능
